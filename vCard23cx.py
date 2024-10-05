@@ -18,8 +18,12 @@ import argparse
 import configparser
 import logging
 import os
-import vcard
+#import vcard
 import mysql.connector
+import base64
+import os
+import shutil
+
 
 
 # Funktion zur Normalisierung von Telefonnummern
@@ -129,9 +133,60 @@ def extractPhoneNumbers(vcard):
 
     return vcardTelEntries
 
+def extract_photo_from_vcard(vcard, photo_path):
+    # Überprüfen, ob die vCard ein Foto enthält
+    if hasattr(vcard, 'photo'):
+        photo = vcard.photo
+
+        # Überprüfen, ob das Foto die erwarteten Daten enthält
+        if hasattr(photo, 'value'):
+            # Extrahiere die Base64-codierten Fotodaten
+            photo_data_base64 = photo.value
+
+            # Decodiere die Base64-Daten
+            try:
+                photo_data = base64.b64decode(photo_data_base64)
+
+                # Sicherstellen, dass das Zielverzeichnis existiert
+                os.makedirs(os.path.dirname(photo_path), exist_ok=True)
+
+                # Schreibe die decodierten Daten in die Datei
+                with open(photo_path, 'wb') as photo_file:
+                    photo_file.write(photo_data)
+                print(f"Foto wurde erfolgreich extrahiert und in {photo_path} gespeichert.")
+            except (TypeError, ValueError) as e:
+                print(f"Fehler beim Decodieren der Base64-Daten: {e}")
+        else:
+            print("Die vCard enthält kein gültiges Foto.")
+    else:
+        print("Die vCard enthält kein Foto.")
+
+def extended_extract_photo_from_vcard(vcard, photo_path):
+    if hasattr(vcard, 'photo'):
+        photo = vcard.photo
+
+        # Überprüfen, ob es sich um ein embedded photo handelt
+        if 'BASE64' in photo.encoding:
+            photo_data_base64 = photo.value
+            try:
+                photo_data = base64.b64decode(photo_data_base64)
+                with open(photo_path, 'wb') as photo_file:
+                    photo_file.write(photo_data)
+                print(f"Foto gespeichert unter: {photo_path}")
+
+        # Überprüfen, ob es sich um einen URI handelt
+        elif 'URI' in photo.encoding:
+            # Hier könntest du eine Funktion hinzufügen, um das Bild von der URL herunterzuladen
+            print(f"Foto-URL gefunden: {photo.value}")
+
+        else:
+            print("Unbekanntes Encoding oder kein Foto verfügbar.")
+    else:
+        print("Die vCard enthält kein Foto.")
+
 
 # Funktion zur Verarbeitung einer vcard
-def verarbeite_vcard(vcard,db):
+def verarbeite_vcard(vcard,db,photoFolder):
         cursor = db.cursor()
     # vcard abrufen und in MySQL einfügen
     #try:
@@ -162,9 +217,11 @@ def verarbeite_vcard(vcard,db):
         faxhome = dbFields ['faxHome']
         pager = dbFields ['pager']
 
-        photourl= vcard.contents['photo'][0].value if 'photo' in vcard.contents else ''
-        photourl= "photourl"
+        #photourl= vcard.contents['photo'][0].value if 'photo' in vcard.contents else ''
+        photourl = photoFolder + '/' + contactid + '.jpg'
+
         lastupdate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        extract_photo_from_vcard(vcard, photoFolder + '/' + contactid + '.jpg')
 
         # SQL-Insert oder Update
         sql = """
@@ -198,7 +255,6 @@ def verarbeite_vcard(vcard,db):
     #    logging.error(f"Fehler bei Verarbeitung des Eintrags {vcard}: {str(e)}")
 
 
-
 def getOneCard(config,vcardLink):
 
     #vcard-Daten von der URL abrufen mit Basic Authentication
@@ -220,7 +276,7 @@ def getOneCard(config,vcardLink):
         vcard = None
     return vcard
 
-def updateDB(config,db,vcardLinks):
+def updateDB(config,db,vcardLinks,photoFolder):
     # Beispiel vcard-Daten (dies wäre das Laden aus einem CardDAV-Server)
     cursor = db.cursor()
 
@@ -230,7 +286,7 @@ def updateDB(config,db,vcardLinks):
         #vcard holen
         vcard = getOneCard(config,vcardLink)
         # vcard verarbeiten
-        verarbeite_vcard(vcard,db)
+        verarbeite_vcard(vcard,db,photoFolder)
     # Änderungen an der Datenbank übernehmen
     db.commit()
     # Alte Einträge entfernen
@@ -363,6 +419,21 @@ def feldTypeDump():
     feldTypeListS = sorted(feldTypeList, reverse=True, key=str.lower)
     print(feldTypeListS)
 
+def createPhotoFolder(folder_path):
+# Erstelle den Ordner, wenn er noch nicht existiert
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+
+# Ändere die Gruppe des Ordners auf 'www-data'
+    shutil.chown(folder_path, user=None, group='www-data')
+
+# Setze die Berechtigungen (rwx für den Besitzer, rwx für die Gruppe, rx für andere)
+# Berechtigung 770: Besitzer und Gruppe haben volle Rechte, andere keine.
+    os.chmod(folder_path, 0o770)
+
+    print(f"Ordner {folder_path} erstellt und Berechtigungen gesetzt.")
+
+
 def main():
     import argparse
     import configparser
@@ -394,7 +465,9 @@ def main():
     createTableIfNotExists(db.cursor())
     vcardLinks = getAllVcardLinks(config)
     feldTypeInit()
-    updateDB(config, db, vcardLinks)
+    photoFolder= config['photo']['photoFolder']
+    createPhotoFolder(photoFolder)
+    updateDB(config, db, vcardLinks,photoFolder)
     feldTypeDump()
 
 if __name__ == "__main__":
