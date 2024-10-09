@@ -47,6 +47,18 @@ password = $DB_PASS
 host = $DB_HOST 
 # $HOSTNAME
 database = $DB_NAME
+
+#this are the querys you need to put in the crm settings of 3cx, each part as given
+[query]
+#Lookup By Number SQL Statement:
+lookupByNumber = SELECT contactid, firstname, lastname, companyname, email, phonemobile, phonemobile2, phonehome,        phonehome2, phonebusiness, phonebusiness2, phoneother, faxbusiness, faxhome, pager, photourl FROM contacts WHERE phonemobile LIKE CONCAT('%', @Number, '%')     OR phonemobile2 LIKE CONCAT('%', @Number, '%')     OR phonehome LIKE CONCAT('%', @Number, '%')     OR phonehome2 LIKE CONCAT('%', @Number, '%')     OR phonebusiness LIKE CONCAT('%', @Number, '%')     OR phonebusiness2 LIKE CONCAT('%', @Number, '%')     OR phoneother LIKE CONCAT('%', @Number, '%');
+
+#Lookup By Email SQL Statement:
+lookupByEmail = SELECT contactid, firstname, lastname, email, phonebusiness, phonemobile, faxbusiness FROM contacts WHERE email = @Email
+
+#Search Contacts SQL Statement:
+searchContacts = SELECT contactid, firstname, lastname, companyname, email, phonemobile, phonemobile2, phonehome, phonehome2, phonebusiness, phonebusiness2, phoneother, faxbusiness, faxhome, pager FROM contacts WHERE firstname LIKE CONCAT('%',@SearchText,'%') or lastname LIKE CONCAT('%',@SearchText,'%') or companyname LIKE CONCAT('%',@SearchText,'%') or email LIKE CONCAT('%',@SearchText,'%') or phonemobile LIKE CONCAT('%',@SearchText,'%') or phonemobile2 LIKE CONCAT('%',@SearchText,'%') or phonehome LIKE CONCAT('%',@SearchText,'%') or phonehome2 LIKE CONCAT('%',@SearchText,'%') or phonebusiness LIKE CONCAT('%',@SearchText,'%') or phonebusiness2 LIKE CONCAT('%',@SearchText,'%') or phoneother LIKE CONCAT('%',@SearchText,'%') or faxbusiness LIKE CONCAT('%',@SearchText,'%') or faxhome LIKE CONCAT('%',@SearchText,'%') or pager LIKE CONCAT('%',@SearchText,'%');
+
 INI_FILE
 
 fi

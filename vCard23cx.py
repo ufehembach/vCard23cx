@@ -18,12 +18,13 @@ import argparse
 import configparser
 import logging
 import os
-#import vcard
 import mysql.connector
 import base64
 import os
 import shutil
-
+import hashlib
+from PIL import Image, ImageDraw, ImageFont
+#import vcard
 
 
 # Funktion zur Normalisierung von Telefonnummern
@@ -133,60 +134,249 @@ def extractPhoneNumbers(vcard):
 
     return vcardTelEntries
 
-def extract_photo_from_vcard(vcard, photo_path):
+def extractPhotoFromVcard(vcard, photoFolder, photoUrlIni, contactid, first_name, last_name):
     # Überprüfen, ob die vCard ein Foto enthält
+    myRet = ''
     if hasattr(vcard, 'photo'):
         photo = vcard.photo
 
         # Überprüfen, ob das Foto die erwarteten Daten enthält
         if hasattr(photo, 'value'):
-            # Extrahiere die Base64-codierten Fotodaten
-            photo_data_base64 = photo.value
+            # Holen Sie sich die ENCODING-Parameter
+            encodings = photo.params.get('ENCODING', [])
 
-            # Decodiere die Base64-Daten
-            try:
-                photo_data = base64.b64decode(photo_data_base64)
+            # Überprüfen, ob eine der Encodings auf Base64 hinweist
+            if any(e.lower() in ['base64', 'b'] for e in encodings):
+                # Extrahiere die Base64-kodierten Fotodaten
+                photo_data_base64 = photo.value
+
+                # Wenn die Daten bereits im Byte-Format vorliegen, überspringe die Decodierung
+                if isinstance(photo_data_base64, str):
+                    # Bereinige die Base64-Daten von Zeilenumbrüchen
+                    photo_data_base64 = photo_data_base64.replace('\n', '').replace('\r', '')
+
+                    # Decodiere die Base64-Daten
+                    try:
+                        photo_data = base64.b64decode(photo_data_base64)
+                    except (TypeError, ValueError) as e:
+                        print(f"Fehler beim Decodieren der Base64-Daten: {e}")
+                        print(vcard.serialize())  # VCard-Daten im VCard-Format ausgeben
+                        return
+                else:
+                    # Die Daten sind bereits als Bytes vorhanden
+                    photo_data = photo_data_base64
 
                 # Sicherstellen, dass das Zielverzeichnis existiert
-                os.makedirs(os.path.dirname(photo_path), exist_ok=True)
+                os.makedirs(os.path.dirname(photoFolder), exist_ok=True)
 
-                # Schreibe die decodierten Daten in die Datei
-                with open(photo_path, 'wb') as photo_file:
-                    photo_file.write(photo_data)
+                # Schreibe die dekodierten Daten in die Datei
+                photo_path = os.path.join(photoFolder, f"{contactid}.jpg")
+                with open(photo_path, 'wb') as photoFile:
+                    photoFile.write(photo_data)
+                myRet = f"{photoUrlIni}/{contactid}.jpg"
                 print(f"Foto wurde erfolgreich extrahiert und in {photo_path} gespeichert.")
-            except (TypeError, ValueError) as e:
-                print(f"Fehler beim Decodieren der Base64-Daten: {e}")
+            else:
+                print("Das Foto ist nicht Base64-kodiert oder verwendet eine unbekannte Kodierung.")
+                print(vcard.serialize())  # VCard-Daten im VCard-Format ausgeben
         else:
             print("Die vCard enthält kein gültiges Foto.")
     else:
         print("Die vCard enthält kein Foto.")
+        # Wenn kein Foto vorhanden ist, generiere ein Platzhalterbild
+        print("Generiere ein Platzhalterbild für den Kontakt.")
+        generate_placeholder_image(photoFolder, contactid, first_name, last_name)
+        myRet = f"{photoUrlIni}/{contactid}.jpg"
+    
+def generate_placeholder_image(photoFolder, contactid, first_name, last_name, image_size=200, font_size=100):
+    """
+    Generiert ein Platzhalterbild mit den Initialen des Kontakts.
 
-def extended_extract_photo_from_vcard(vcard, photo_path):
-    if hasattr(vcard, 'photo'):
-        photo = vcard.photo
+    :param photoFolder: Der Ordner, in dem die Fotos gespeichert werden sollen
+    :param contactid: Eindeutige ID für den Kontakt
+    :param first_name: Vorname des Kontakts
+    :param last_name: Nachname des Kontakts
+    :param image_size: Größe des generierten Bildes (Pixel)
+    :param font_size: Größe der Schrift für die Initialen
+    """
+    initials = ''.join([name[0].upper() for name in [first_name, last_name] if name]).strip()
+    if not initials:
+        initials = "?"  # Fallback, falls keine Namen vorhanden sind
 
-        # Überprüfen, ob es sich um ein embedded photo handelt
-        if 'BASE64' in photo.encoding:
-            photo_data_base64 = photo.value
-            try:
-                photo_data = base64.b64decode(photo_data_base64)
-                with open(photo_path, 'wb') as photo_file:
-                    photo_file.write(photo_data)
-                print(f"Foto gespeichert unter: {photo_path}")
+    # Erstelle einen Hash aus der contactid, um eine konsistente Farbe zu erhalten
+    hash_object = hashlib.md5(contactid.encode())
+    hash_digest = hash_object.hexdigest()
+    
+    # Verwende Teile des Hashes, um RGB-Farben zu generieren
+    r = int(hash_digest[0:2], 16)
+    g = int(hash_digest[2:4], 16)
+    b = int(hash_digest[4:6], 16)
+    
+    # Optional: Du kannst die Farben anpassen, um sie "lustiger" oder lebendiger zu machen
+    # Hier ein Beispiel für eine helle Farbe
+    r = (r + 128) % 256
+    g = (g + 128) % 256
+    b = (b + 128) % 256
 
-        # Überprüfen, ob es sich um einen URI handelt
-        elif 'URI' in photo.encoding:
-            # Hier könntest du eine Funktion hinzufügen, um das Bild von der URL herunterzuladen
-            print(f"Foto-URL gefunden: {photo.value}")
+    # Erstelle das Bild
+    image = Image.new('RGB', (image_size, image_size), color=(r, g, b))
+    draw = ImageDraw.Draw(image)
 
-        else:
-            print("Unbekanntes Encoding oder kein Foto verfügbar.")
-    else:
-        print("Die vCard enthält kein Foto.")
+    # Lade eine Schriftart. Stelle sicher, dass der Pfad zur Schriftart korrekt ist.
+    # Alternativ kannst du eine Standard-Schriftart verwenden.
+    try:
+        # Verwende eine truetype Schriftart, z.B. Arial
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except IOError:
+        # Fallback auf eine Standard-Schriftart
+        font = ImageFont.load_default()
 
+    # Berechne die Position, um den Text zu zentrieren
+    text_width, text_height = draw.textsize(initials, font=font)
+    position = ((image_size - text_width) / 2, (image_size - text_height) / 2 - 10)
+
+    # Wähle eine kontrastreiche Farbe für den Text (weiß oder schwarz)
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b)
+    text_color = (255, 255, 255) if luminance < 128 else (0, 0, 0)
+
+    # Zeichne die Initialen auf das Bild
+    draw.text(position, initials, fill=text_color, font=font)
+
+    # Optional: Füge einen Farbverlauf oder andere Effekte hinzu
+    # Dies kann die Komplexität erhöhen, aber auch die Ästhetik verbessern
+
+    # Speichere das Bild
+    os.makedirs(photoFolder, exist_ok=True)
+    image_path = os.path.join(photoFolder, f"{contactid}.jpg")
+    image.save(image_path, format='JPEG')
+    print(f"Platzhalterbild wurde erfolgreich in {image_path} gespeichert.")
+
+
+def createVcardHtml(vcard, photoUrl, vCardFolder, contactid):
+    # Prepare details from vCard
+    fields = {
+        "Name": vcard.fn.value if hasattr(vcard, 'fn') else "Unknown",
+        "Organization": vcard.org.value[0] if hasattr(vcard, 'org') else "No organization",
+        "Title": vcard.title.value if hasattr(vcard, 'title') else "No title",
+        "Emails": [],
+        "Phones": [],
+        "Addresses": []
+    }
+
+    # Extract phone numbers dynamically
+    if hasattr(vcard, 'tel_list'):
+        for tel in vcard.tel_list:
+            tel_type = ', '.join(tel.params.get('TYPE', [])).title() if 'TYPE' in tel.params else "Other"
+            fields["Phones"].append((tel_type, tel.value))
+
+    # Extract email addresses dynamically
+    if hasattr(vcard, 'email_list'):
+        for email in vcard.email_list:
+            email_type = ', '.join(email.params.get('TYPE', [])).title() if 'TYPE' in email.params else "Other"
+            fields["Emails"].append((email_type, email.value))
+
+    # Initialize address as "Unknown"
+    address = "Unknown"
+
+
+    # HTML structure
+    html_content = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>{fields['Name']} - vCard</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                padding: 0;
+                background-color: #f9f9f9;
+                color: #333;
+            }}
+            .container {{
+                display: flex;
+                flex-direction: row;
+                align-items: flex-start;
+            }}
+            .photo {{
+                margin-right: 20px;
+            }}
+            .details {{
+                display: grid;
+                grid-template-columns: auto auto;
+                gap: 10px 20px;
+            }}
+            .label {{
+                color: grey;
+                font-weight: normal;
+            }}
+            .value {{
+                font-weight: bold;
+                color: black;
+            }}
+            img {{
+                max-width: 150px;
+                border-radius: 8px;
+            }}
+        </style>
+    </head>
+    <body>
+        <h1>{fields['Name']}</h1>
+        <div class="container">
+            <div class="photo">
+                <img src="{photoUrl}" alt="{fields['Name']}'s Photo">
+            </div>
+            <div class="details">
+    """
+
+    # Add Organization and Title
+    html_content += f"""
+        <div class="label">Organization:</div>
+        <div class="value">{fields['Organization']}</div>
+        <div class="label">Title:</div>
+        <div class="value">{fields['Title']}</div>
+    """
+
+    # Add Phones
+    for phone_type, phone_number in fields["Phones"]:
+        html_content += f"""
+        <div class="label">Phone ({phone_type}):</div>
+        <div class="value">{phone_number}</div>
+        """
+
+    # Add Emails
+    for email_type, email_address in fields["Emails"]:
+        html_content += f"""
+        <div class="label">Email ({email_type}):</div>
+        <div class="value">{email_address}</div>
+        """
+
+    html_content += f"""
+        <div>
+             <div class="label">Address:</div>
+            <div class="content">{address}</div>
+            <!-- Add other details as needed -->
+        </div>
+        """
+
+    # Close HTML tags
+    html_content += """
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+    # Write HTML to the output file
+    os.makedirs(os.path.dirname(vCardFolder), exist_ok=True)
+    with open(vCardFolder + '/' + contactid + '.html', 'w', encoding='utf-8') as f:
+        f.write(html_content)
+
+    print(f"HTML page created at: {vCardFolder}")
 
 # Funktion zur Verarbeitung einer vcard
-def verarbeite_vcard(vcard,db,photoFolder):
+def verarbeite_vcard(vcard,db,config):
         cursor = db.cursor()
     # vcard abrufen und in MySQL einfügen
     #try:
@@ -217,11 +407,15 @@ def verarbeite_vcard(vcard,db,photoFolder):
         faxhome = dbFields ['faxHome']
         pager = dbFields ['pager']
 
-        #photourl= vcard.contents['photo'][0].value if 'photo' in vcard.contents else ''
-        photourl = photoFolder + '/' + contactid + '.jpg'
+        photoUrlIni= config['html']['photoUrl']
+        photoFolder = config['html']['photofolder']
+        photourl = extractPhotoFromVcard(vcard, photoFolder, photoUrlIni, contactid, firstname, lastname)
+    
+        vCardFolder = config['html']['vCardFolder']
+        vCardUrl = createVcardHtml(vcard, photourl, vCardFolder, contactid)
 
         lastupdate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        extract_photo_from_vcard(vcard, photoFolder + '/' + contactid + '.jpg')
+
 
         # SQL-Insert oder Update
         sql = """
@@ -256,7 +450,6 @@ def verarbeite_vcard(vcard,db,photoFolder):
 
 
 def getOneCard(config,vcardLink):
-
     #vcard-Daten von der URL abrufen mit Basic Authentication
     auth = HTTPBasicAuth(config['carddav']['user'], config['carddav']['pass'])
     response = requests.get(vcardLink, auth=(config['carddav']['user'], config['carddav']['pass']))
@@ -286,7 +479,7 @@ def updateDB(config,db,vcardLinks,photoFolder):
         #vcard holen
         vcard = getOneCard(config,vcardLink)
         # vcard verarbeiten
-        verarbeite_vcard(vcard,db,photoFolder)
+        verarbeite_vcard(vcard,db,config)
     # Änderungen an der Datenbank übernehmen
     db.commit()
     # Alte Einträge entfernen
@@ -432,6 +625,37 @@ def createPhotoFolder(folder_path):
     os.chmod(folder_path, 0o770)
 
     print(f"Ordner {folder_path} erstellt und Berechtigungen gesetzt.")
+import os
+import time
+from datetime import datetime, timedelta
+
+def cleanup_files(program_directory, photo_directory):
+    # Aktuelles Datum und Zeit
+    now = time.time()
+    
+    # Alter der Dateien in Sekunden berechnen (5 Tage und 1 Tag in Sekunden)
+    five_days_ago = now - (5 * 86400)  # 5 Tage * 86400 Sekunden pro Tag
+    one_day_ago = now - (1 * 86400)    # 1 Tag * 86400 Sekunden pro Tag
+    
+    # Aufräumen im Programmverzeichnis (.txt und .log Dateien älter als 5 Tage)
+    for file_name in os.listdir(program_directory):
+        file_path = os.path.join(program_directory, file_name)
+        # Prüfen, ob es sich um eine Datei handelt und ob sie älter als 5 Tage ist
+        if os.path.isfile(file_path) and file_name.endswith(('.txt', '.log')):
+            file_mtime = os.path.getmtime(file_path)
+            if file_mtime < five_days_ago:
+                os.remove(file_path)
+                print(f"{file_name} (älter als 5 Tage) wurde gelöscht.")
+
+    # Aufräumen im Fotoverzeichnis (Fotos älter als 1 Tag)
+    for file_name in os.listdir(photo_directory):
+        file_path = os.path.join(photo_directory, file_name)
+        # Prüfen, ob es sich um eine Datei handelt und ob sie älter als 1 Tag ist
+        if os.path.isfile(file_path) and file_name.endswith(('.jpg', '.jpeg', '.png')):
+            file_mtime = os.path.getmtime(file_path)
+            if file_mtime < one_day_ago:
+                os.remove(file_path)
+                print(f"{file_name} (älter als 1 Tag) wurde gelöscht.")
 
 
 def main():
@@ -440,7 +664,7 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument('ini_file')
-    parser.add_argument("--no-update", help="Don't write to db ", action='store_true', default=False)
+#    parser.add_argument("--no-update", help="Don't write to db ", action='store_true', default=False)
     args = parser.parse_args()
 
     config = configparser.RawConfigParser()
@@ -465,10 +689,16 @@ def main():
     createTableIfNotExists(db.cursor())
     vcardLinks = getAllVcardLinks(config)
     feldTypeInit()
-    photoFolder= config['photo']['photoFolder']
+    photoFolder= config['html']['photoFolder']
     createPhotoFolder(photoFolder)
-    updateDB(config, db, vcardLinks,photoFolder)
+    vCardFolder = config['html']['vCardFolder']
+    createPhotoFolder(vCardFolder)
+    updateDB(config, db, vcardLinks,config)
     feldTypeDump()
+    # Aufräumfunktion aufrufen
+    program_directory = os.path.dirname(os.path.abspath(__file__))
+    cleanup_files(program_directory, photoFolder)
+    cleanup_files(program_directory, vCardFolder)
 
 if __name__ == "__main__":
     logger = logging.getLogger(__name__)
