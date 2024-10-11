@@ -59,6 +59,16 @@ lookupByEmail = SELECT contactid, firstname, lastname, email, phonebusiness, pho
 #Search Contacts SQL Statement:
 searchContacts = SELECT contactid, firstname, lastname, companyname, email, phonemobile, phonemobile2, phonehome, phonehome2, phonebusiness, phonebusiness2, phoneother, faxbusiness, faxhome, pager FROM contacts WHERE firstname LIKE CONCAT('%',@SearchText,'%') or lastname LIKE CONCAT('%',@SearchText,'%') or companyname LIKE CONCAT('%',@SearchText,'%') or email LIKE CONCAT('%',@SearchText,'%') or phonemobile LIKE CONCAT('%',@SearchText,'%') or phonemobile2 LIKE CONCAT('%',@SearchText,'%') or phonehome LIKE CONCAT('%',@SearchText,'%') or phonehome2 LIKE CONCAT('%',@SearchText,'%') or phonebusiness LIKE CONCAT('%',@SearchText,'%') or phonebusiness2 LIKE CONCAT('%',@SearchText,'%') or phoneother LIKE CONCAT('%',@SearchText,'%') or faxbusiness LIKE CONCAT('%',@SearchText,'%') or faxhome LIKE CONCAT('%',@SearchText,'%') or pager LIKE CONCAT('%',@SearchText,'%');
 
+Contact URL Prefix = http://myFancyServer/vCard23cxCards
+	
+Contact URL Prefix = 
+
+[html]
+photoFolder = /var/www/html/vCard23cxPhotos
+photoURL = http://myFancyServer/vCard23cxPhotos
+vCardFolder = /var/www/html/vCard23cxvCards
+vCardURL = http:/myFancyServer/vCard23cxvCards
+
 INI_FILE
 
 fi

@@ -174,7 +174,9 @@ def extractPhotoFromVcard(vcard, photoFolder, photoUrlIni, contactid, first_name
                 with open(photo_path, 'wb') as photoFile:
                     photoFile.write(photo_data)
                 myRet = f"{photoUrlIni}/{contactid}.jpg"
-                print(f"Foto wurde erfolgreich extrahiert und in {photo_path} gespeichert.")
+                #print(f"1Foto wurde erfolgreich extrahiert und in {photo_path} gespeichert.")
+                #print(f"2{photoUrlIni} {contactid}.jpg")
+                #print(f"3URL: {myRet}")
             else:
                 print("Das Foto ist nicht Base64-kodiert oder verwendet eine unbekannte Kodierung.")
                 print(vcard.serialize())  # VCard-Daten im VCard-Format ausgeben
@@ -186,6 +188,7 @@ def extractPhotoFromVcard(vcard, photoFolder, photoUrlIni, contactid, first_name
         print("Generiere ein Platzhalterbild für den Kontakt.")
         generate_placeholder_image(photoFolder, contactid, first_name, last_name)
         myRet = f"{photoUrlIni}/{contactid}.jpg"
+    return myRet
     
 def generate_placeholder_image(photoFolder, contactid, first_name, last_name, image_size=200, font_size=100):
     """
@@ -373,7 +376,7 @@ def createVcardHtml(vcard, photoUrl, vCardFolder, contactid):
     with open(vCardFolder + '/' + contactid + '.html', 'w', encoding='utf-8') as f:
         f.write(html_content)
 
-    print(f"HTML page created at: {vCardFolder}")
+    #print(f"HTML page created at: {vCardFolder}")
 
 # Funktion zur Verarbeitung einer vcard
 def verarbeite_vcard(vcard,db,config):
@@ -542,8 +545,8 @@ def extract_host(url):
 def getAllVcardLinks(config):
     auth = HTTPBasicAuth(config['carddav']['user'], config['carddav']['pass'])
     url = config['carddav']['url']
-    print(auth)
-    print(url)
+    #print(auth)
+    #print(url)
     headers = {
         "Depth": "1",
         "Content-Type": "application/xml; charset=utf-8"
