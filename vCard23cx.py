@@ -190,16 +190,59 @@ def extractPhotoFromVcard(vcard, photoFolder, photoUrlIni, contactid, first_name
         myRet = f"{photoUrlIni}/{contactid}.jpg"
     return myRet
     
-def generate_placeholder_image(photoFolder, contactid, first_name, last_name, image_size=200, font_size=100):
+import os
+import hashlib
+import random
+from PIL import Image, ImageDraw, ImageFont
+import matplotlib.font_manager as fm  # Um alle installierten Schriftarten zu laden
+
+import os
+import hashlib
+import random
+from PIL import Image, ImageDraw, ImageFont
+import matplotlib.font_manager as fm  # Um alle installierten Schriftarten zu laden
+
+ASCII_CHARS = "@%#*+=-:. "  # Zeichen für verschiedene Helligkeitsstufen
+
+def resize_image(image, new_width=30):
+    width, height = image.size
+    aspect_ratio = height / width
+    new_height = int(aspect_ratio * new_width)
+    resized_image = image.resize((new_width, new_height))
+    return resized_image
+
+def grayscale_image(image):
+    return image.convert("L")
+
+def map_pixels_to_ascii(image, range_width=25):
+    pixels = list(image.getdata())
+    ascii_str = ""
+    for pixel_value in pixels:
+        ascii_str += ASCII_CHARS[pixel_value // range_width]
+    return ascii_str
+
+def convert_image_to_ascii(image, new_width=30):
+    image = resize_image(image, new_width)
+    image = grayscale_image(image)
+    
+    ascii_str = map_pixels_to_ascii(image)
+    img_width = image.width
+    
+    ascii_image = ""
+    for i in range(0, len(ascii_str), img_width):
+        ascii_image += ascii_str[i:i+img_width] + "\n"
+    
+    return ascii_image
+
+def generate_placeholder_image(photoFolder, contactid, first_name, last_name, image_size=200):
     """
-    Generiert ein Platzhalterbild mit den Initialen des Kontakts.
+    Generiert ein Platzhalterbild mit den Initialen des Kontakts und gibt es als ASCII aus.
 
     :param photoFolder: Der Ordner, in dem die Fotos gespeichert werden sollen
     :param contactid: Eindeutige ID für den Kontakt
     :param first_name: Vorname des Kontakts
     :param last_name: Nachname des Kontakts
     :param image_size: Größe des generierten Bildes (Pixel)
-    :param font_size: Größe der Schrift für die Initialen
     """
     initials = ''.join([name[0].upper() for name in [first_name, last_name] if name]).strip()
     if not initials:
@@ -208,14 +251,13 @@ def generate_placeholder_image(photoFolder, contactid, first_name, last_name, im
     # Erstelle einen Hash aus der contactid, um eine konsistente Farbe zu erhalten
     hash_object = hashlib.md5(contactid.encode())
     hash_digest = hash_object.hexdigest()
-    
+
     # Verwende Teile des Hashes, um RGB-Farben zu generieren
     r = int(hash_digest[0:2], 16)
     g = int(hash_digest[2:4], 16)
     b = int(hash_digest[4:6], 16)
-    
-    # Optional: Du kannst die Farben anpassen, um sie "lustiger" oder lebendiger zu machen
-    # Hier ein Beispiel für eine helle Farbe
+
+    # Helle Farbe
     r = (r + 128) % 256
     g = (g + 128) % 256
     b = (b + 128) % 256
@@ -224,18 +266,20 @@ def generate_placeholder_image(photoFolder, contactid, first_name, last_name, im
     image = Image.new('RGB', (image_size, image_size), color=(r, g, b))
     draw = ImageDraw.Draw(image)
 
-    # Lade eine Schriftart. Stelle sicher, dass der Pfad zur Schriftart korrekt ist.
-    # Alternativ kannst du eine Standard-Schriftart verwenden.
+    # Liste aller installierten Schriftarten abrufen und zufällig auswählen
+    available_fonts = fm.findSystemFonts(fontpaths=None, fontext='ttf')
+    random_font_path = random.choice(available_fonts)
+
     try:
-        # Verwende eine truetype Schriftart, z.B. Arial
-        font = ImageFont.truetype("arial.ttf", font_size)
+        # Zufällige Schriftart laden
+        font = ImageFont.truetype(random_font_path, int(image_size / 3))
     except IOError:
         # Fallback auf eine Standard-Schriftart
         font = ImageFont.load_default()
 
     # Berechne die Position, um den Text zu zentrieren
     text_width, text_height = draw.textsize(initials, font=font)
-    position = ((image_size - text_width) / 2, (image_size - text_height) / 2 - 10)
+    position = ((image_size - text_width) / 2, (image_size - text_height) / 2)
 
     # Wähle eine kontrastreiche Farbe für den Text (weiß oder schwarz)
     luminance = (0.299 * r + 0.587 * g + 0.114 * b)
@@ -244,14 +288,17 @@ def generate_placeholder_image(photoFolder, contactid, first_name, last_name, im
     # Zeichne die Initialen auf das Bild
     draw.text(position, initials, fill=text_color, font=font)
 
-    # Optional: Füge einen Farbverlauf oder andere Effekte hinzu
-    # Dies kann die Komplexität erhöhen, aber auch die Ästhetik verbessern
-
     # Speichere das Bild
     os.makedirs(photoFolder, exist_ok=True)
     image_path = os.path.join(photoFolder, f"{contactid}.jpg")
     image.save(image_path, format='JPEG')
     print(f"Platzhalterbild wurde erfolgreich in {image_path} gespeichert.")
+
+    # ASCII-Image Ausgabe im Log
+    ascii_image = convert_image_to_ascii(image)
+    print("ASCII-Bild:")
+    print(ascii_image)
+
 
 
 def createVcardHtml(vcard, photoUrl, vCardFolder, contactid):
@@ -418,6 +465,7 @@ def verarbeite_vcard(vcard,db,config):
         vCardUrl = createVcardHtml(vcard, photourl, vCardFolder, contactid)
 
         lastupdate = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        info = config['info']['description']
 
 
         # SQL-Insert oder Update
@@ -441,7 +489,8 @@ def verarbeite_vcard(vcard,db,config):
             faxhome=VALUES(faxhome),
             pager=VALUES(pager),
             photourl=VALUES(photourl),
-            lastupdate=VALUES(lastupdate)
+            lastupdate=VALUES(lastupdate),
+            info=VALUES(info)
 
         """
         cursor.execute(sql, (contactid, firstname, lastname, companyname, email, phonemobile, phonemobile2, phonehome, phonehome2, phonebusiness, phonebusiness2, phoneother, faxbusiness, faxhome, pager, photourl, lastupdate))
@@ -524,6 +573,7 @@ def createTableIfNotExists(db_cursor):
     faxhome VARCHAR(50),
     pager VARCHAR(50),
     photourl VARCHAR(255),
+    info VARCHAR(255),
     lastupdate DATETIME
     );
 """

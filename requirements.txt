@@ -1,5 +1,0 @@
-mysql_connector_repackaged==0.3.1
-Pillow==8.1.2
-Pillow==10.4.0
-Requests==2.32.3
-vobject==0.9.7

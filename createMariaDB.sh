@@ -1,5 +1,8 @@
 #!/bin/bash
 
+#edit values here
+#dbhost has to run mariadb and the root user password will be asked during runtime
+
 # Variablen
 DB_HOST="localhost"
 DB_NAME="3cxAddressBook"
@@ -34,6 +37,10 @@ else
 	cat > vCard23cx.ini <<INI_FILE
 ############################
 #`date --iso-8601=seconds` 
+[info]
+description = `hostname` vCard23cx.ini
+fullDescription = this settings where created by the script $0 on `hostname`
+
 
 [carddav]
 url = https://hosted.server.sample/SOGo/dav/user@email.liam/Contacts/whatever
