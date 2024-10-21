@@ -295,9 +295,9 @@ def generate_placeholder_image(photoFolder, contactid, first_name, last_name, im
     print(f"Platzhalterbild wurde erfolgreich in {image_path} gespeichert.")
 
     # ASCII-Image Ausgabe im Log
-    ascii_image = convert_image_to_ascii(image)
-    print("ASCII-Bild:")
-    print(ascii_image)
+ #   ascii_image = convert_image_to_ascii(image)
+ #   print("ASCII-Bild:")
+ #   print(ascii_image)
 
 
 
@@ -470,8 +470,8 @@ def verarbeite_vcard(vcard,db,config):
 
         # SQL-Insert oder Update
         sql = """
-        INSERT INTO contacts (contactid, firstname, lastname, companyname, email, phonemobile, phonemobile2, phonehome, phonehome2, phonebusiness, phonebusiness2, phoneother, faxbusiness, faxhome, pager, photourl, lastupdate)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        INSERT INTO contacts (contactid, firstname, lastname, companyname, email, phonemobile, phonemobile2, phonehome, phonehome2, phonebusiness, phonebusiness2, phoneother, faxbusiness, faxhome, pager, photourl, lastupdate, info)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         ON DUPLICATE KEY UPDATE
             contactid=VALUES(contactid),
             firstname=VALUES(firstname),
@@ -491,9 +491,8 @@ def verarbeite_vcard(vcard,db,config):
             photourl=VALUES(photourl),
             lastupdate=VALUES(lastupdate),
             info=VALUES(info)
-
         """
-        cursor.execute(sql, (contactid, firstname, lastname, companyname, email, phonemobile, phonemobile2, phonehome, phonehome2, phonebusiness, phonebusiness2, phoneother, faxbusiness, faxhome, pager, photourl, lastupdate))
+        cursor.execute(sql, (contactid, firstname, lastname, companyname, email, phonemobile, phonemobile2, phonehome, phonehome2, phonebusiness, phonebusiness2, phoneother, faxbusiness, faxhome, pager, photourl, lastupdate,info))
        # db.commit()
         print(f"Done", flush=True)
     #except Exception as e:
@@ -573,8 +572,8 @@ def createTableIfNotExists(db_cursor):
     faxhome VARCHAR(50),
     pager VARCHAR(50),
     photourl VARCHAR(255),
-    info VARCHAR(255),
-    lastupdate DATETIME
+    lastupdate DATETIME,
+    info VARCHAR(255)
     );
 """
     
